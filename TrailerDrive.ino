@@ -1,3 +1,5 @@
+#define INTERVAL 3000 // Time between switching outputs (in seconds)
+
 #define PB0  2 // Mode change switch at pin 2
 #define PB1  3 // Manual select switch at pin 3
 
@@ -9,25 +11,23 @@
 #define RELAY_5 11  // Relay channel 5 at pin 11
 #define RELAY_6 12  // Relay channel 6 at pin 12
 
-unsigned long interval = 3000;   
-unsigned long previousMillis = 0;
+unsigned long currentMillis,      // runtime in ms
+              previousMillis = 0; // used to store time checkpoints
 
-int count = 0;
-int PB0_lastVal = 0;
-int PB0_val = 0;
-int PB1_lastVal = 0;
-int PB1_val = 0;
-bool MANUAL = false;
-bool CYCLE = false;
-int cycleCount = 0;
+bool  PB0_pressed, 
+      PB1_pressed = false;
+
+enum {ALL, CYCLE, MANUAL} STATE;  // stores current mode of operation
+int cycleCount = 0; // stores the current output when cycling
 
 void setup() 
 {
+  // Start serial
   Serial.begin(9600);    // make sure your monitor baud rate matches this
-  
-  pinMode(PB0,INPUT);
-  pinMode(PB1,INPUT);
-  
+  // Inputs
+  pinMode(PB0, INPUT_PULLUP);  // Enables the internal pull-up resistor
+  pinMode(PB1, INPUT_PULLUP);  // Enables the internal pull-up resistor
+  //Outputs
   pinMode(RELAY_0, OUTPUT);
   pinMode(RELAY_1, OUTPUT);
   pinMode(RELAY_2, OUTPUT);
@@ -36,95 +36,46 @@ void setup()
   pinMode(RELAY_5, OUTPUT);
   pinMode(RELAY_6, OUTPUT);
 
-  setLow(); // Initially all outputs OFF
-  Serial.println("Ready...");
-  
-  // put into mode 0
-    Serial.print("MODE: ");
-    Serial.println(count);
-    CYCLE = false;
-    MANUAL = false;
-    setHigh();
-  
-
-
+  // Initially set mode to display all outputs;
+  STATE = ALL;
+  stateInit();
 }
 
 void loop() 
 {
-  unsigned long currentMillis = millis();       // Get runtime
-  PB0_lastVal = PB0_val;
-  PB1_lastVal = PB1_val;
-  PB0_val = digitalRead(PB0);
-  PB1_val = digitalRead(PB1);
-  
-  if( (PB0_val == 1) && (PB0_lastVal == 0) )  // when  mode button is pushed
-  {
-    if (count < 2)
-      count = count + 1;
-    else
-      count = 0;
-      
-    Serial.print("MODE: ");
-    Serial.println(count);
-
-    switch (count)
-    {
-      case 0: // This mode turns all outputs on
-        CYCLE = false;
-        MANUAL = false;
-        setHigh();
-      break;
-  
-      case 1: // This mode cycles outputs
-        setLow();
-        cycleCount = 0;
-        CYCLE = true;
-        MANUAL = false;
-      break;
-  
-      case 2: // This mode allows manual selection of output
-        cycleCount = 0;
-        CYCLE = false;
-        MANUAL = true;
-        setLow();
-      break;
-  
-      default:
-        setLow();
-        CYCLE = false;
-        MANUAL = false;
-        Serial.println("UNKNOWN MODE");
-      break;
-    }
-
-  }
-
-if (CYCLE)
-{
-  if (currentMillis - previousMillis >= interval) // if the interval is up...
-  {
-    runCycle(cycleCount);
-    previousMillis = currentMillis;     // save the last time LED was blinked
-    if (cycleCount < 6)
-      cycleCount = cycleCount + 1;
-    else
-      cycleCount = 0;
-  }
+  currentMillis = millis();       // Get runtime
+  readInputs();
+  setState();
+  stateProcess();
 }
 
-if (MANUAL)
+void readInputs(void)
 {
-  if( (PB1_val == 1) && (PB1_lastVal == 0) )  // when  selection button is pushed
-  {
-    runCycle(cycleCount);
-    if (cycleCount < 6)
-      cycleCount = cycleCount + 1;
-    else
-      cycleCount = 0;
-  }
-}
+  static bool PB0_state, 
+              last_PB0_state, 
+              PB1_state, 
+              last_PB1_state = false; // Remembers the current and previous button states
 
+  // store the previous state
+  last_PB0_state = PB0_state;
+  last_PB1_state = PB1_state;
+  
+  // read pins
+  PB0_state = !digitalRead(PB0); // active low
+  PB1_state = !digitalRead(PB1); // active low
+
+  if (!PB0_state && last_PB0_state) // on a falling edge we register a button press
+  {
+    PB0_pressed = true;
+    Serial.println("PB0 pushed");
+  }
+
+  if (!PB1_state && last_PB1_state) // on a falling edge we register a button press
+  {
+    PB1_pressed = true;
+    Serial.println("PB1 pushed");
+  }
+  delay(10);
 }
 
 void setLow() // All outputs off (active low)
@@ -161,5 +112,86 @@ void runCycle(int cc)
   Serial.print("Relay ");
   Serial.print(cc);
   Serial.println(" ON");
+}
+
+void setState()
+{
+  if (PB0_pressed)
+  {
+    PB0_pressed = false;
+
+    if (STATE < 2)
+      STATE = STATE + 1;
+    else
+      STATE = 0;
+ 
+    stateInit();
+  }
+}
+
+void stateInit(void)
+{
+  Serial.print("State: ");
+  Serial.println(STATE);
+ 
+  switch (STATE)
+  {
+    case ALL: // This mode turns all outputs on
+      setHigh();
+    break;
+
+    case CYCLE: // This mode cycles outputs
+      setLow();
+      cycleCount = 0;
+    break;
+
+    case MANUAL: // This mode allows manual selection of output
+      cycleCount = 0;
+      setLow();
+    break;
+
+    default:
+      setLow();
+      Serial.println("UNKNOWN MODE");
+    break;
+  }
+}
+
+void stateProcess(void)
+{
+  switch (STATE)
+  {
+    case ALL: // This mode turns all outputs on
+      // do nothing
+    break;
+
+    case CYCLE: // This mode cycles outputs
+      if (currentMillis - previousMillis >= INTERVAL) // if the INTERVAL is up...
+      {
+        runCycle(cycleCount);
+        previousMillis = currentMillis;     // save current time
+        if (cycleCount < 6)
+          cycleCount = cycleCount + 1;
+        else
+          cycleCount = 0;
+      }
+    break;
+
+    case MANUAL: // This mode allows manual selection of output
+      if(PB1_pressed)  // when  selection button is pushed
+      {
+        PB1_pressed = false;
+        runCycle(cycleCount);
+        if (cycleCount < 6)
+          cycleCount = cycleCount + 1;
+        else
+          cycleCount = 0;
+      }
+    break;
+
+    default:
+    // do nothing
+    break;
+  }
 }
 
