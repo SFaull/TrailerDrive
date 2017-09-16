@@ -1,5 +1,5 @@
-#define SW0  2 // Mode change switch at pin 2
-#define SW1  3 // Manual select switch at pin 3
+#define PB0  2 // Mode change switch at pin 2
+#define PB1  3 // Manual select switch at pin 3
 
 #define RELAY_0 6   // Relay channel 0 at pin 6
 #define RELAY_1 7   // Relay channel 1 at pin 7
@@ -13,10 +13,10 @@ unsigned long interval = 3000;
 unsigned long previousMillis = 0;
 
 int count = 0;
-int SW0_lastVal = 0;
-int SW0_val = 0;
-int SW1_lastVal = 0;
-int SW1_val = 0;
+int PB0_lastVal = 0;
+int PB0_val = 0;
+int PB1_lastVal = 0;
+int PB1_val = 0;
 bool MANUAL = false;
 bool CYCLE = false;
 int cycleCount = 0;
@@ -25,8 +25,8 @@ void setup()
 {
   Serial.begin(9600);    // make sure your monitor baud rate matches this
   
-  pinMode(SW0,INPUT);
-  pinMode(SW1,INPUT);
+  pinMode(PB0,INPUT);
+  pinMode(PB1,INPUT);
   
   pinMode(RELAY_0, OUTPUT);
   pinMode(RELAY_1, OUTPUT);
@@ -53,12 +53,12 @@ void setup()
 void loop() 
 {
   unsigned long currentMillis = millis();       // Get runtime
-  SW0_lastVal = SW0_val;
-  SW1_lastVal = SW1_val;
-  SW0_val = digitalRead(SW0);
-  SW1_val = digitalRead(SW1);
+  PB0_lastVal = PB0_val;
+  PB1_lastVal = PB1_val;
+  PB0_val = digitalRead(PB0);
+  PB1_val = digitalRead(PB1);
   
-  if( (SW0_val == 1) && (SW0_lastVal == 0) )  // when  mode button is pushed
+  if( (PB0_val == 1) && (PB0_lastVal == 0) )  // when  mode button is pushed
   {
     if (count < 2)
       count = count + 1;
@@ -115,7 +115,7 @@ if (CYCLE)
 
 if (MANUAL)
 {
-  if( (SW1_val == 1) && (SW1_lastVal == 0) )  // when  selection button is pushed
+  if( (PB1_val == 1) && (PB1_lastVal == 0) )  // when  selection button is pushed
   {
     runCycle(cycleCount);
     if (cycleCount < 6)
