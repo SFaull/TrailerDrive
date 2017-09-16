@@ -11,6 +11,10 @@
 #define RELAY_5 11  // Relay channel 5 at pin 11
 #define RELAY_6 12  // Relay channel 6 at pin 12
 
+#define LED0 A0  // LED 0 at pin A0
+#define LED1 A1  // LED 1 at pin A1
+#define LED2 A2  // LED 2 at pin A2
+
 unsigned long currentMillis,      // runtime in ms
               previousMillis = 0; // used to store time checkpoints
 
@@ -104,6 +108,20 @@ void setHigh() // All outputs on (active low)
   Serial.println("All outpts ON");
 }
 
+void LED(int pin)
+{
+  digitalWrite(LED0, LOW);
+  digitalWrite(LED1, LOW);
+  digitalWrite(LED2, LOW);
+  
+  if (pin == 0)
+    digitalWrite(LED0, HIGH);
+  else if (pin == 1)
+    digitalWrite(LED1, HIGH);
+  else if (pin == 2)
+    digitalWrite(LED2, HIGH);
+}
+
 void runCycle(int cc)
 {
   setLow();
@@ -138,16 +156,19 @@ void stateInit(void)
   {
     case ALL: // This mode turns all outputs on
       setHigh();
+      LED(0);
     break;
 
     case CYCLE: // This mode cycles outputs
       setLow();
       cycleCount = 0;
+      LED(1);
     break;
 
     case MANUAL: // This mode allows manual selection of output
       cycleCount = 0;
       setLow();
+      LED(2);
     break;
 
     default:
