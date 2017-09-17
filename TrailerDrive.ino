@@ -1,18 +1,18 @@
 #define INTERVAL 3000 // Time between switching outputs (in seconds)
 
-#define PB0  2  // Mode change switch at pin 2
-#define PB1  3  // Manual select switch at pin 3
-#define LED0 4  // LED 0 at pin 4
-#define LED1 5  // LED 1 at pin 5
+#define PB0  A0  // Mode change switch at pin A0
+#define PB1  A1  // Manual select switch at pin A1
+#define LED0 A2  // LED 0 at pin A2
+#define LED1 A3  // LED 1 at pin A3
 
-#define RELAY_0 A0    // Relay channel 0 at pin A1
-#define RELAY_1 A1    // Relay channel 1 at pin A2
-#define RELAY_2 A2    // Relay channel 2 at pin A3
-#define RELAY_3 A3    // Relay channel 3 at pin A4
-#define RELAY_4 A4    // Relay channel 4 at pin A5
-#define RELAY_5 A5    // Relay channel 5 at pin A6
-#define RELAY_6 A6    // Relay channel 6 at pin A7
-#define RELAY_7 A7    // Relay channel 7 at pin A8 (CURRENTLY UNUSED)
+#define RELAY_0 2    // Relay channel 0 at pin 2
+#define RELAY_1 3    // Relay channel 1 at pin 3
+#define RELAY_2 4    // Relay channel 2 at pin 4
+#define RELAY_3 5    // Relay channel 3 at pin 5
+#define RELAY_4 6    // Relay channel 4 at pin 6
+#define RELAY_5 7    // Relay channel 5 at pin 7
+#define RELAY_6 8    // Relay channel 6 at pin 8
+#define RELAY_7 9    // Relay channel 7 at pin 9 (CURRENTLY UNUSED)
 
 unsigned long currentMillis,      // runtime in ms
               previousMillis = 0; // used to store time checkpoints
@@ -169,6 +169,7 @@ void stateInit(void)
       cycleCount = 0;
       setLow();
       LED(0);
+      runCycle(cycleCount);
     break;
 
     default:
