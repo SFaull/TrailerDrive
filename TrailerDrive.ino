@@ -1,4 +1,10 @@
+#include "FastLED.h"
+
+
+#define NUM_OUTPUTS 6
 #define INTERVAL 3000 // Time between switching outputs (in seconds)
+
+#define LED_DATA_PIN 10
 
 #define PB0  A0  // Mode change switch at pin A0
 #define PB1  A1  // Manual select switch at pin A1
@@ -11,7 +17,7 @@
 #define RELAY_3 5    // Relay channel 3 at pin 5
 #define RELAY_4 6    // Relay channel 4 at pin 6
 #define RELAY_5 7    // Relay channel 5 at pin 7
-#define RELAY_6 8    // Relay channel 6 at pin 8
+#define RELAY_6 8    // Relay channel 6 at pin 8 (CURRENTLY UNUSED)
 #define RELAY_7 9    // Relay channel 7 at pin 9 (CURRENTLY UNUSED)
 
 unsigned long currentMillis,      // runtime in ms
@@ -22,6 +28,17 @@ bool  PB0_pressed,
 
 enum {ALL, CYCLE, MANUAL} STATE;  // stores current mode of operation
 int cycleCount = 0; // stores the current output when cycling
+
+CRGB leds[NUM_OUTPUTS];
+CRGB wireColour[NUM_OUTPUTS] = 
+{
+  CRGB::Yellow,
+  CRGB::White,
+  CRGB::Red,
+  CRGB::SaddleBrown,
+  CRGB::Blue,
+  CRGB::Green
+};
 
 void setup() 
 {
@@ -42,9 +59,13 @@ void setup()
   pinMode(RELAY_6, OUTPUT);
   pinMode(RELAY_7, OUTPUT);
 
+  FastLED.addLeds<NEOPIXEL, LED_DATA_PIN>(leds, NUM_OUTPUTS);
+
   // Initially set mode to display all outputs;
   STATE = ALL;
   stateInit();
+
+  FastLED.setBrightness(128);
 }
 
 void loop() 
@@ -85,28 +106,25 @@ void readInputs(void)
 }
 
 void setLow() // All outputs off (active low)
-{
-  digitalWrite(RELAY_0, HIGH);
-  digitalWrite(RELAY_1, HIGH);
-  digitalWrite(RELAY_2, HIGH);
-  digitalWrite(RELAY_3, HIGH);
-  digitalWrite(RELAY_4, HIGH);
-  digitalWrite(RELAY_5, HIGH);
-  digitalWrite(RELAY_6, HIGH);
-  digitalWrite(RELAY_7, HIGH);  // This relay output is currently unused
+{  
+  for (int i=0; i<NUM_OUTPUTS; i++)  // turn all LEDs off
+  {
+      digitalWrite(RELAY_0 + i, HIGH);
+      leds[i] = CRGB::Black;
+  }
+  FastLED.show();
 
   Serial.println("All outpts OFF");
 }
 
 void setHigh() // All outputs on (active low)
 {
-  digitalWrite(RELAY_0, LOW);
-  digitalWrite(RELAY_1, LOW);
-  digitalWrite(RELAY_2, LOW);
-  digitalWrite(RELAY_3, LOW);
-  digitalWrite(RELAY_4, LOW);
-  digitalWrite(RELAY_5, LOW);
-  digitalWrite(RELAY_6, LOW);
+  for(int i=0; i<NUM_OUTPUTS; i++) // turn all LEDs on
+  {
+    digitalWrite(RELAY_0 + i, LOW);
+    leds[i] = wireColour[i];
+  }
+  FastLED.show();
 
   Serial.println("All outpts ON");
 }
@@ -126,7 +144,11 @@ void runCycle(int cc)
 {
   setLow();
   int tmp = RELAY_0 + cc;
+  
+  leds[cc] = wireColour[cc];
   digitalWrite(tmp, LOW); // Active low
+  FastLED.show();
+  
   Serial.print("Relay ");
   Serial.print(cc);
   Serial.println(" ON");
@@ -192,7 +214,7 @@ void stateProcess(void)
       {
         runCycle(cycleCount);
         previousMillis = currentMillis;     // save current time
-        if (cycleCount < 6)
+        if (cycleCount < (NUM_OUTPUTS-1))
           cycleCount = cycleCount + 1;
         else
           cycleCount = 0;
@@ -204,7 +226,7 @@ void stateProcess(void)
       {
         PB1_pressed = false;
         runCycle(cycleCount);
-        if (cycleCount < 6)
+        if (cycleCount < (NUM_OUTPUTS-1))
           cycleCount = cycleCount + 1;
         else
           cycleCount = 0;
