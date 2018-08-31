@@ -2,10 +2,10 @@
 
 
 #define NUM_OUTPUTS 6
-#define INTERVAL 3000 // Time between switching outputs (in seconds)
+#define CYCLE_TIMEOUT 3000 // Time between switching outputs (in seconds)
+#define INPUT_READ_TIMEOUT     50   //check for button pressed every 50ms
 
 #define LED_DATA_PIN 10
-
 #define PB0  A0  // Mode change switch at pin A0
 #define PB1  A1  // Manual select switch at pin A1
 #define LED0 A2  // LED 0 at pin A2
@@ -20,8 +20,10 @@
 #define RELAY_6 8    // Relay channel 6 at pin 8 (CURRENTLY UNUSED)
 #define RELAY_7 9    // Relay channel 7 at pin 9 (CURRENTLY UNUSED)
 
-unsigned long currentMillis,      // runtime in ms
-              previousMillis = 0; // used to store time checkpoints
+#define MAX_BRIGHTNESS 255
+
+unsigned long readInputTimer  = 0,
+              cycleTimer = 0;
 
 bool  PB0_pressed, 
       PB1_pressed = false;
@@ -29,15 +31,16 @@ bool  PB0_pressed,
 enum {ALL, CYCLE, MANUAL} STATE;  // stores current mode of operation
 int cycleCount = 0; // stores the current output when cycling
 
-CRGB leds[NUM_OUTPUTS];
+CRGB leds[NUM_OUTPUTS+2]; // we have 2 more leds than outputs
 CRGB wireColour[NUM_OUTPUTS] = 
 {
   CRGB::Yellow,
   CRGB::White,
   CRGB::Red,
-  CRGB::SaddleBrown,
-  CRGB::Blue,
-  CRGB::Green
+  //CRGB::SaddleBrown,
+  CRGB::Orange,
+  CRGB::Green,
+  CRGB::Blue
 };
 
 void setup() 
@@ -59,18 +62,20 @@ void setup()
   pinMode(RELAY_6, OUTPUT);
   pinMode(RELAY_7, OUTPUT);
 
-  FastLED.addLeds<NEOPIXEL, LED_DATA_PIN>(leds, NUM_OUTPUTS);
+  FastLED.addLeds<NEOPIXEL, LED_DATA_PIN>(leds, NUM_OUTPUTS+2).setCorrection( TypicalLEDStrip );
 
   // Initially set mode to display all outputs;
   STATE = ALL;
   stateInit();
 
-  FastLED.setBrightness(128);
+  FastLED.setBrightness(MAX_BRIGHTNESS);
+
+  setTimer(&readInputTimer);  // reset timer
+  setTimer(&cycleTimer);  // reset timer
 }
 
 void loop() 
 {
-  currentMillis = millis();       // Get runtime
   readInputs();
   setState();
   stateProcess();
@@ -82,32 +87,37 @@ void readInputs(void)
               last_PB0_state, 
               PB1_state, 
               last_PB1_state = false; // Remembers the current and previous button states
+              
+  /* Periodically read the inputs */
+  if (timerExpired(readInputTimer, INPUT_READ_TIMEOUT)) // check for button press periodically
+  {
+    setTimer(&readInputTimer);  // reset timer
 
-  // store the previous state
-  last_PB0_state = PB0_state;
-  last_PB1_state = PB1_state;
+    // store the previous state
+    last_PB0_state = PB0_state;
+    last_PB1_state = PB1_state;
+    
+    // read pins
+    PB0_state = !digitalRead(PB0); // active low
+    PB1_state = !digitalRead(PB1); // active low
   
-  // read pins
-  PB0_state = !digitalRead(PB0); // active low
-  PB1_state = !digitalRead(PB1); // active low
-
-  if (!PB0_state && last_PB0_state) // on a falling edge we register a button press
-  {
-    PB0_pressed = true;
-    Serial.println("PB0 pushed");
+    if (!PB0_state && last_PB0_state) // on a falling edge we register a button press
+    {
+      PB0_pressed = true;
+      Serial.println("PB0 pushed");
+    }
+  
+    if (!PB1_state && last_PB1_state) // on a falling edge we register a button press
+    {
+      PB1_pressed = true;
+      Serial.println("PB1 pushed");
+    }
   }
-
-  if (!PB1_state && last_PB1_state) // on a falling edge we register a button press
-  {
-    PB1_pressed = true;
-    Serial.println("PB1 pushed");
-  }
-  delay(10);
 }
 
 void setLow() // All outputs off (active low)
 {  
-  for (int i=0; i<NUM_OUTPUTS; i++)  // turn all LEDs off
+  for (int i=0; i<NUM_OUTPUTS+2; i++)  // turn all LEDs off
   {
       digitalWrite(RELAY_0 + i, HIGH);
       leds[i] = CRGB::Black;
@@ -122,7 +132,7 @@ void setHigh() // All outputs on (active low)
   for(int i=0; i<NUM_OUTPUTS; i++) // turn all LEDs on
   {
     digitalWrite(RELAY_0 + i, LOW);
-    leds[i] = wireColour[i];
+    leds[i+1] = wireColour[i];
   }
   FastLED.show();
 
@@ -146,6 +156,8 @@ void runCycle(int cc)
   int tmp = RELAY_0 + cc;
   
   leds[cc] = wireColour[cc];
+  leds[cc+1] = wireColour[cc];
+  leds[cc+2] = wireColour[cc];
   digitalWrite(tmp, LOW); // Active low
   FastLED.show();
   
@@ -177,6 +189,7 @@ void stateInit(void)
   switch (STATE)
   {
     case ALL: // This mode turns all outputs on
+      setLow();
       setHigh();
       LED(1);
     break;
@@ -210,10 +223,10 @@ void stateProcess(void)
     break;
 
     case CYCLE: // This mode cycles outputs
-      if (currentMillis - previousMillis >= INTERVAL) // if the INTERVAL is up...
+      if (timerExpired(cycleTimer, CYCLE_TIMEOUT)) // check for button press periodically
       {
+        setTimer(&cycleTimer);  // reset timer
         runCycle(cycleCount);
-        previousMillis = currentMillis;     // save current time
         if (cycleCount < (NUM_OUTPUTS-1))
           cycleCount = cycleCount + 1;
         else
@@ -239,3 +252,18 @@ void stateProcess(void)
   }
 }
 
+/* pass this function a pointer to an unsigned long to store the start time for the timer */
+void setTimer(unsigned long *startTime)
+{
+  *startTime = millis();  // store the current time
+}
+
+/* call this function and pass it the variable which stores the timer start time and the desired expiry time 
+   returns true fi timer has expired */
+bool timerExpired(unsigned long startTime, unsigned long expiryTime)
+{
+  if ( (millis() - startTime) >= expiryTime )
+    return true;
+  else
+    return false;
+}
