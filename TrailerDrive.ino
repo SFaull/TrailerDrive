@@ -65,7 +65,7 @@ void setup()
   FastLED.addLeds<NEOPIXEL, LED_DATA_PIN>(leds, NUM_OUTPUTS+2).setCorrection( TypicalLEDStrip );
 
   // Initially set mode to display all outputs;
-  STATE = ALL;
+  STATE = CYCLE;
   stateInit();
 
   FastLED.setBrightness(MAX_BRIGHTNESS);
@@ -153,17 +153,40 @@ void LED(int pin)
 void runCycle(int cc)
 {
   setLow();
-  int tmp = RELAY_0 + cc;
   
-  leds[cc] = wireColour[cc];
-  leds[cc+1] = wireColour[cc];
-  leds[cc+2] = wireColour[cc];
-  digitalWrite(tmp, LOW); // Active low
-  FastLED.show();
-  
-  Serial.print("Relay ");
-  Serial.print(cc);
-  Serial.println(" ON");
+  if(cc < NUM_OUTPUTS)
+  {
+    int tmp = RELAY_0 + cc;
+    
+    leds[cc] = wireColour[cc];
+    leds[cc+1] = wireColour[cc];
+    leds[cc+2] = wireColour[cc];
+    digitalWrite(tmp, LOW); // Active low
+    FastLED.show();
+    
+    Serial.print("Relay ");
+    Serial.print(cc);
+    Serial.println(" ON");
+  }
+  else
+  {
+    // special case for final state
+    leds[1] = wireColour[1];
+    leds[2] = wireColour[1];
+    leds[4] = wireColour[3];
+    leds[5] = wireColour[3];
+    digitalWrite(RELAY_1, LOW); // Active low (left side)
+    digitalWrite(RELAY_3, LOW); // Active low (right side)
+    FastLED.show();
+    
+    Serial.print("Relay ");
+    Serial.print(1);
+    Serial.println(" ON");
+
+    Serial.print("Relay ");
+    Serial.print(3);
+    Serial.println(" ON");
+  }
 }
 
 void setState()
@@ -198,13 +221,14 @@ void stateInit(void)
       setLow();
       cycleCount = 0;
       LED(2);
+      //runCycle(cycleCount);
     break;
 
     case MANUAL: // This mode allows manual selection of output
       cycleCount = 0;
       setLow();
       LED(0);
-      runCycle(cycleCount);
+      //runCycle(cycleCount);
     break;
 
     default:
@@ -227,7 +251,8 @@ void stateProcess(void)
       {
         setTimer(&cycleTimer);  // reset timer
         runCycle(cycleCount);
-        if (cycleCount < (NUM_OUTPUTS-1))
+        
+        if (cycleCount < NUM_OUTPUTS)
           cycleCount = cycleCount + 1;
         else
           cycleCount = 0;
@@ -239,10 +264,11 @@ void stateProcess(void)
       {
         PB1_pressed = false;
         runCycle(cycleCount);
-        if (cycleCount < (NUM_OUTPUTS-1))
+        
+        if (cycleCount < NUM_OUTPUTS)
           cycleCount = cycleCount + 1;
         else
-          cycleCount = 0;
+          cycleCount = 0;        
       }
     break;
 
